@@ -1,13 +1,14 @@
 ---
 - name: MySQL Server Health Check
   hosts: 20.55.88.203
+  connection: ssh
   vars:
     mysql_host: "{{mysql_host}}"
     mysql_user: "{{mysql_user}}"
     mysql_password: "{{mysql_password}}"
     mysql_database: "{{mysql_database}}"
     mysql_port: "{{mysql_port}}"
-  connection: ssh
+  
   tasks:
     - name: Check MySQL server connection
       command: "mysql -h {{ mysql_host }} -P {{ mysql_port }} -u {{ mysql_user }} -p{{ mysql_password }} -e 'SELECT 1;'"
