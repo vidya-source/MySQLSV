@@ -1,33 +1,25 @@
 ---
-- name: Connect to MySQL server on Linux
-  hosts: localhost
-  become: yes
-
+- name: Check MySQL Database Space
+  hosts: my_servers
+  become: yes  # If needed to use sudo privileges
   tasks:
-    - name: Ensure MySQL is installed
+    - name: Ensure MySQL client is installed
       package:
         name: mysql-client
         state: present
 
-    - name: Test MySQL connection
-      community.mysql.mysql_db:
-        name: information_schema
-        state: import
-        login_user: "{{ mysql_user }}"
-        login_password: "{{ mysql_password }}"
-        login_host: "{{ mysql_host }}"
-        login_port: "{{ mysql_port }}"
-        # You can also use `ssl` options here if needed
+    - name: Get database size from MySQL
+      mysql_db:
+        name: MYSQLSV
+        state: query
+        login_user: root  # Adjust the login user
+        login_password: "{{ mysql_root_password }}"  # Use an Ansible variable for security
+        query: "SELECT table_schema AS 'Database', 
+                        SUM(data_length + index_length) / 1024 / 1024 AS 'Size (MB)' 
+                 FROM information_schema.tables 
+                 GROUP BY table_schema;"
+      register: db_space
 
-    - name: List databases
-      community.mysql.mysql_db:
-        name: "{{ item }}"
-        state: list
-        login_user: "{{ mysql_user }}"
-        login_password: "{{ mysql_password }}"
-        login_host: "{{ mysql_host }}"
-        login_port: "{{ mysql_port }}"
-      loop:
-        - information_schema
-        - performance_schema
-        - mysql
+    - name: Show database sizes
+      debug:
+        msg: "{{ db_space.query_result }}"
