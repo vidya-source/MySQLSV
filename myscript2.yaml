@@ -1,82 +1,110 @@
 ---
 - name: MySQL Health Check and Monitoring
-  hosts: localhost
-  become: true
+  hosts: mysql_servers
+  become: yes
   vars:
-    mysql_user: "mysql_user"
-    mysql_password: "mysql_password"
-    mysql_host: "mysql_host"
-    mysql_port: "mysql_port"
-    mysql_database: "mysql_database"
+    MYSQLHOST : "mysqlAutomation"
+    MYSQLPASSWORD : "mysqlAutomation"
+    MYSQLHOST : "127.0.0.1"
+    MYSQLPORT : "3306"
+    MYSQLDATABASE : "MSQLSV"
 
+  
   tasks:
-    - name: Check MySQL Database Space Usage
-      mysql_query:
-        login_user: "{{ mysql_user }}"
-        login_password: "{{ mysql_password }}"
-        login_host: "{{ mysql_host }}"
-        login_port: "{{ mysql_port }}"
-        mysql_database: "{{mysql_database}}"
-        query: "SELECT table_schema AS db_name, SUM(data_length + index_length) / 1024 / 1024 AS db_size_mb FROM information_schema.tables GROUP BY table_schema;"
-      register: db_space_usage
+    - name: Install MySQL Python connector
+      ansible.builtin.pip:
+        name: mysql-connector-python
+        state: present
 
-    - name: Display Database Space Usage
+    - name: Check Database Space Utilization
+      mysql_db:
+        login_host: "{{ MYSQLHOST }}"
+        login_port: "{{ MYSQLPORT }}"
+        login_user: "{{ MYSQLUSER }}"
+        login_password: "{{ MYSQLPASSWORD }}"
+        db: "{{ MYSQLDATABASE }}"
+        state: query
+        query: |
+          SELECT table_schema AS 'Database',
+                 SUM(data_length + index_length) / 1024 / 1024 AS 'Size (MB)'
+          FROM information_schema.tables
+          GROUP BY table_schema;
+      register: db_space
+
+    - name: Display Database Space Utilization
       debug:
-        msg: "{{ db_space_usage.query_result }}"
+        msg: "{{ db_space.query_result }}"
 
-    - name: Check MySQL Database Utilization
-      mysql_query:
-        login_user: "{{ mysql_user }}"
-        login_password: "{{ mysql_password }}"
-        login_host: "{{ mysql_host }}"
-        login_port: "{{ mysql_port }}"
-        mysql_database: "{{mysql_database}}"
-        query: "SHOW STATUS LIKE 'Innodb_buffer_pool%';"
-      register: db_utilization
+    - name: Check Database Health (Uptime)
+      mysql_db:
+        login_host: "{{ MYSQLHOST }}"
+        login_port: "{{ MYSQLPORT }}"
+        login_user: "{{ MYSQLUSER }}"
+        login_password: "{{ MYSQLPASSWORD }}"
+        db: "{{ MYSQLDATABASE }}"
+        state: query
+        query: |
+          SHOW STATUS LIKE 'Uptime';
+      register: db_uptime
 
-    - name: Display Database Utilization
+    - name: Display Database Uptime
       debug:
-        msg: "{{ db_utilization.query_result }}"
+        msg: "Uptime: {{ db_uptime.query_result }}"
 
-    - name: Check MySQL Health Status
-      mysql_query:
-        login_user: "{{ mysql_user }}"
-        login_password: "{{ mysql_password }}"
-        login_host: "{{ mysql_host }}"
-        login_port: "{{ mysql_port }}"
-        mysql_database: "{{mysql_database}}"
-        query: "SHOW ENGINE INNODB STATUS;"
-      register: db_health_status
+    - name: Check Threads Connected
+      mysql_db:
+        login_host: "{{ MYSQLHOST }}"
+        login_port: "{{ MYSQLPORT }}"
+        login_user: "{{ MYSQLUSER }}"
+        login_password: "{{ MYSQLPASSWORD }}"
+        db: "{{ MYSQLDATABASE }}"
+        state: query
+        query: |
+          SHOW STATUS LIKE 'Threads_connected';
+      register: threads_connected
 
-    - name: Display MySQL Health Status
+    - name: Display Threads Connected
       debug:
-        msg: "{{ db_health_status.query_result }}"
+        msg: "Threads connected: {{ threads_connected.query_result }}"
 
-    - name: Check for MySQL Deadlocks
-      mysql_query:
-        login_user: "{{ mysql_user }}"
-        login_password: "{{ mysql_password }}"
-        login_host: "{{ mysql_host }}"
-        login_port: "{{ mysql_port }}"
-        mysql_database: "{{mysql_database}}"
-        query: "SHOW ENGINE INNODB STATUS;"
-      register: deadlocks
+    - name: Check for Deadlocks
+      mysql_db:
+        login_host: "{{ MYSQLHOST }}"
+        login_port: "{{ MYSQLPORT }}"
+        login_user: "{{ MYSQLUSER }}"
+        login_password: "{{ MYSQLPASSWORD }}"
+        db: "{{ MYSQLDATABASE }}"
+        state: query
+        query: |
+          SHOW ENGINE INNODB STATUS;
+      register: deadlock_status
 
-    - name: Display Deadlock Information
+    - name: Check if Deadlocks are present
       debug:
-        msg: "{{ deadlocks.query_result | selectattr('Msg_text', 'search', 'deadlock') | list }}"
+        msg: |
+          {% if 'LATEST DETECTED DEADLOCK' in deadlock_status.query_result %}
+            Deadlock detected:
+            {{ deadlock_status.query_result }}
+          {% else %}
+            No deadlocks detected.
+          {% endif %}
 
-    - name: Check for Active Jobs in MySQL
-      mysql_query:
-        login_user: "{{ mysql_user }}"
-        login_password: "{{ mysql_password }}"
-        login_host: "{{ mysql_host }}"
-        login_port: "{{ mysql_port }}"
-        mysql_database: "{{mysql_database}}"
-        query: "SHOW PROCESSLIST;"
-      register: active_jobs
+    - name: Check Job Activities (Running Queries)
+      mysql_db:
+        login_host: "{{ MYSQLHOST }}"
+        login_port: "{{ MYSQLPORT }}"
+        login_user: "{{ MYSQLUSER }}"
+        login_password: "{{ MYSQLPASSWORD }}"
+        db: "{{ MYSQLDATABASE }}"
+        state: query
+        query: |
+          SHOW PROCESSLIST;
+      register: job_activities
 
-    - name: Display Active Jobs
+    - name: Display Current Running Queries
       debug:
-        msg: "{{ active_jobs.query_result }}"
-
+        msg: |
+          {% for job in job_activities.query_result %}
+            ID: {{ job.id }}, User: {{ job.user }}, Command: {{ job.command }},
+            Time: {{ job.time }}, Info: {{ job.info }}
+          {% endfor %}
