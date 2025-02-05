@@ -3,7 +3,7 @@
   hosts: mysql_servers
   become: yes
   vars:
-    mysql_host: "{{ mysql_host }}"
+    mysql_host: "{{mysql_host}}"
     mysql_user: "{{mysql_user}}"
     mysql_password: "{{mysql_password}}"
     mysql_database: "{{mysql_database}}"
@@ -11,94 +11,56 @@
 
   tasks:
     - name: Check MySQL server connection
-      community.mysql.mysql_db:
-        name: "{{ mysql_database }}"
-        login_user: "{{ mysql_user }}"
-        login_password: "{{ mysql_password }}"
-        login_host: "{{ mysql_host }}"
-        login_port: "{{ mysql_port }}"
-        state: "present"
+      command: "mysql -h {{ mysql_host }} -P {{ mysql_port }} -u {{ mysql_user }} -p{{ mysql_password }} -e 'SELECT 1;'"
       register: mysql_connection_status
-      failed_when: mysql_connection_status.failed
+      failed_when: mysql_connection_status.rc != 0
+      changed_when: false
 
     - name: Ensure MySQL is connected successfully
       debug:
         msg: "Successfully connected to MySQL server"
-      when: mysql_connection_status is success
+      when: mysql_connection_status.rc == 0
 
     - name: Get database space utilization
-      community.mysql.mysql_query:
-        login_user: "{{ mysql_user }}"
-        login_password: "{{ mysql_password }}"
-        login_host: "{{ mysql_host }}"
-        login_port: "{{ mysql_port }}"
-        query: |
-          SELECT table_schema AS 'Database', 
-                 ROUND(SUM(data_length + index_length) / 1024 / 1024, 2) AS 'Size (MB)'
-          FROM information_schema.tables
-          GROUP BY table_schema;
+      command: "mysql -h {{ mysql_host }} -P {{ mysql_port }} -u {{ mysql_user }} -p{{ mysql_password }} -e 'SELECT table_schema AS \"Database\", ROUND(SUM(data_length + index_length) / 1024 / 1024, 2) AS \"Size (MB)\" FROM information_schema.tables GROUP BY table_schema;'"
       register: db_space
 
     - name: Print database space utilization
       debug:
         msg: "Database: {{ item.Database }} | Size (MB): {{ item.Size }}"
-      loop: "{{ db_space.results }}"
-      when: db_space is defined
+      loop: "{{ db_space.stdout_lines[1:] }}"
+      when: db_space.stdout_lines | length > 1
 
-    - name: Get MySQL server uptime and threads connected
-      community.mysql.mysql_query:
-        login_user: "{{ mysql_user }}"
-        login_password: "{{ mysql_password }}"
-        login_host: "{{ mysql_host }}"
-        login_port: "{{ mysql_port }}"
-        query: |
-          SHOW STATUS LIKE 'Uptime';
+    - name: Get MySQL server uptime
+      command: "mysql -h {{ mysql_host }} -P {{ mysql_port }} -u {{ mysql_user }} -p{{ mysql_password }} -e 'SHOW STATUS LIKE \"Uptime\";'"
       register: mysql_uptime
 
     - name: Get number of threads connected
-      community.mysql.mysql_query:
-        login_user: "{{ mysql_user }}"
-        login_password: "{{ mysql_password }}"
-        login_host: "{{ mysql_host }}"
-        login_port: "{{ mysql_port }}"
-        query: |
-          SHOW STATUS LIKE 'Threads_connected';
+      command: "mysql -h {{ mysql_host }} -P {{ mysql_port }} -u {{ mysql_user }} -p{{ mysql_password }} -e 'SHOW STATUS LIKE \"Threads_connected\";'"
       register: threads_connected
 
     - name: Print database health (Uptime and Threads Connected)
       debug:
-        msg: "Uptime: {{ mysql_uptime.results[0].Value }} seconds, Threads connected: {{ threads_connected.results[0].Value }}"
-      when: mysql_uptime is defined and threads_connected is defined
+        msg: "Uptime: {{ mysql_uptime.stdout_lines[1].split()[1] }} seconds, Threads connected: {{ threads_connected.stdout_lines[1].split()[1] }}"
+      when: mysql_uptime.stdout_lines | length > 1 and threads_connected.stdout_lines | length > 1
 
     - name: Check for MySQL deadlocks
-      community.mysql.mysql_query:
-        login_user: "{{ mysql_user }}"
-        login_password: "{{ mysql_password }}"
-        login_host: "{{ mysql_host }}"
-        login_port: "{{ mysql_port }}"
-        query: |
-          SHOW ENGINE INNODB STATUS;
+      command: "mysql -h {{ mysql_host }} -P {{ mysql_port }} -u {{ mysql_user }} -p{{ mysql_password }} -e 'SHOW ENGINE INNODB STATUS;'"
       register: innodb_status
 
     - name: Detect deadlocks from INNODB STATUS
       debug:
         msg: "Deadlock detected: {{ item }}"
-      loop: "{{ innodb_status.results }}"
+      loop: "{{ innodb_status.stdout_lines }}"
       when: "'LATEST DETECTED DEADLOCK' in item"
       failed_when: false
 
     - name: Show MySQL process list (current running queries)
-      community.mysql.mysql_query:
-        login_user: "{{ mysql_user }}"
-        login_password: "{{ mysql_password }}"
-        login_host: "{{ mysql_host }}"
-        login_port: "{{ mysql_port }}"
-        query: |
-          SHOW PROCESSLIST;
+      command: "mysql -h {{ mysql_host }} -P {{ mysql_port }} -u {{ mysql_user }} -p{{ mysql_password }} -e 'SHOW PROCESSLIST;'"
       register: processlist
 
     - name: Print running queries
       debug:
-        msg: "ID: {{ item.id }} | User: {{ item.user }} | Command: {{ item.command }} | Time: {{ item.time }} | Info: {{ item.info }}"
-      loop: "{{ processlist.results }}"
-      when: processlist is defined
+        msg: "ID: {{ item.split()[0] }} | User: {{ item.split()[1] }} | Command: {{ item.split()[4] }} | Time: {{ item.split()[5] }} | Info: {{ item.split()[7] }}"
+      loop: "{{ processlist.stdout_lines[1:] }}"
+      when: processlist.stdout_lines | length > 1
