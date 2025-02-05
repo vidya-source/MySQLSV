@@ -1,6 +1,6 @@
 ---
 - name: MySQL Server Health Check
-  hosts: my_servers
+  hosts: mysql_servers
   become: yes
   vars:
     mysql_host: "{{ mysql_host }}"
@@ -11,7 +11,7 @@
 
   tasks:
     - name: Check MySQL server connection
-      mysql_db:
+      community.mysql.mysql_db:
         name: "{{ mysql_database }}"
         login_user: "{{ mysql_user }}"
         login_password: "{{ mysql_password }}"
@@ -20,7 +20,6 @@
         state: "present"
       register: mysql_connection_status
       failed_when: mysql_connection_status.failed
-      ignore_errors: yes
 
     - name: Ensure MySQL is connected successfully
       debug:
@@ -28,7 +27,7 @@
       when: mysql_connection_status is success
 
     - name: Get database space utilization
-      mysql_query:
+      community.mysql.mysql_query:
         login_user: "{{ mysql_user }}"
         login_password: "{{ mysql_password }}"
         login_host: "{{ mysql_host }}"
@@ -39,7 +38,6 @@
           FROM information_schema.tables
           GROUP BY table_schema;
       register: db_space
-      when: mysql_connection_status is success
 
     - name: Print database space utilization
       debug:
@@ -48,7 +46,7 @@
       when: db_space is defined
 
     - name: Get MySQL server uptime and threads connected
-      mysql_query:
+      community.mysql.mysql_query:
         login_user: "{{ mysql_user }}"
         login_password: "{{ mysql_password }}"
         login_host: "{{ mysql_host }}"
@@ -56,10 +54,9 @@
         query: |
           SHOW STATUS LIKE 'Uptime';
       register: mysql_uptime
-      when: mysql_connection_status is success
 
     - name: Get number of threads connected
-      mysql_query:
+      community.mysql.mysql_query:
         login_user: "{{ mysql_user }}"
         login_password: "{{ mysql_password }}"
         login_host: "{{ mysql_host }}"
@@ -67,7 +64,6 @@
         query: |
           SHOW STATUS LIKE 'Threads_connected';
       register: threads_connected
-      when: mysql_connection_status is success
 
     - name: Print database health (Uptime and Threads Connected)
       debug:
@@ -75,7 +71,7 @@
       when: mysql_uptime is defined and threads_connected is defined
 
     - name: Check for MySQL deadlocks
-      mysql_query:
+      community.mysql.mysql_query:
         login_user: "{{ mysql_user }}"
         login_password: "{{ mysql_password }}"
         login_host: "{{ mysql_host }}"
@@ -83,7 +79,6 @@
         query: |
           SHOW ENGINE INNODB STATUS;
       register: innodb_status
-      when: mysql_connection_status is success
 
     - name: Detect deadlocks from INNODB STATUS
       debug:
@@ -93,7 +88,7 @@
       failed_when: false
 
     - name: Show MySQL process list (current running queries)
-      mysql_query:
+      community.mysql.mysql_query:
         login_user: "{{ mysql_user }}"
         login_password: "{{ mysql_password }}"
         login_host: "{{ mysql_host }}"
@@ -101,7 +96,6 @@
         query: |
           SHOW PROCESSLIST;
       register: processlist
-      when: mysql_connection_status is success
 
     - name: Print running queries
       debug:
