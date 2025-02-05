@@ -9,7 +9,6 @@
     mysql_port: "mysql_port"
 
   tasks:
-
     - name: Check MySQL Database Space Usage
       mysql_query:
         login_user: "{{ mysql_user }}"
