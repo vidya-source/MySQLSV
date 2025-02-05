@@ -7,7 +7,6 @@
     mysql_user: "mysql_user"  # Replace with your MySQL user
     mysql_password: "your_mysql_password"  # Replace with your MySQL password
     mysql_database: "your_database_name"  # Replace with your database name
-    mysql_port: "your_port"
 
   tasks:
     # Step 1: Ensure MySQL client is installed
@@ -22,13 +21,13 @@
         login_user: "{{ mysql_user }}"
         login_password: "{{ mysql_password }}"
         login_host: "{{ mysql_host }}"
-        mysql_port: "{{ your_port }}"
         query: |
           SELECT table_schema AS 'Database', 
                  SUM(data_length + index_length) / 1024 / 1024 AS 'Size (MB)'
           FROM information_schema.tables
           GROUP BY table_schema;
       register: db_space
+
     - name: Display database space utilization
       debug:
         msg: "{{ db_space.query_result }}"
@@ -39,10 +38,10 @@
         login_user: "{{ mysql_user }}"
         login_password: "{{ mysql_password }}"
         login_host: "{{ mysql_host }}"
-        mysql_port: "{{ your_port }}"
         query: |
           SHOW STATUS LIKE 'Uptime';
       register: uptime_result
+
     - name: Display MySQL uptime
       debug:
         msg: "Uptime: {{ uptime_result.query_result[0].Value }} seconds"
@@ -52,10 +51,10 @@
         login_user: "{{ mysql_user }}"
         login_password: "{{ mysql_password }}"
         login_host: "{{ mysql_host }}"
-        mysql_port: "{{ your_port }}"
         query: |
           SHOW STATUS LIKE 'Threads_connected';
       register: threads_result
+
     - name: Display threads connected
       debug:
         msg: "Threads connected: {{ threads_result.query_result[0].Value }}"
@@ -66,7 +65,6 @@
         login_user: "{{ mysql_user }}"
         login_password: "{{ mysql_password }}"
         login_host: "{{ mysql_host }}"
-        mysql_port: "{{ your_port }}"
         query: |
           SHOW ENGINE INNODB STATUS;
       register: innodb_status
@@ -81,7 +79,6 @@
         login_user: "{{ mysql_user }}"
         login_password: "{{ mysql_password }}"
         login_host: "{{ mysql_host }}"
-        mysql_port: "{{ your_port }}"
         query: |
           SHOW PROCESSLIST;
       register: processlist_result
