@@ -1,12 +1,13 @@
 ---
 - name: MySQL Health Check and Monitoring
   hosts: localhost
-  become: yes
+  become: true
   vars:
     mysql_user: "mysql_user"
     mysql_password: "mysql_password"
     mysql_host: "mysql_host"
     mysql_port: "mysql_port"
+    mysql_database: "mysql_database"
 
   tasks:
     - name: Check MySQL Database Space Usage
@@ -15,6 +16,7 @@
         login_password: "{{ mysql_password }}"
         login_host: "{{ mysql_host }}"
         login_port: "{{ mysql_port }}"
+        mysql_database: "{{mysql_database}}"
         query: "SELECT table_schema AS db_name, SUM(data_length + index_length) / 1024 / 1024 AS db_size_mb FROM information_schema.tables GROUP BY table_schema;"
       register: db_space_usage
 
@@ -28,6 +30,7 @@
         login_password: "{{ mysql_password }}"
         login_host: "{{ mysql_host }}"
         login_port: "{{ mysql_port }}"
+        mysql_database: "{{mysql_database}}"
         query: "SHOW STATUS LIKE 'Innodb_buffer_pool%';"
       register: db_utilization
 
@@ -41,6 +44,7 @@
         login_password: "{{ mysql_password }}"
         login_host: "{{ mysql_host }}"
         login_port: "{{ mysql_port }}"
+        mysql_database: "{{mysql_database}}"
         query: "SHOW ENGINE INNODB STATUS;"
       register: db_health_status
 
@@ -54,6 +58,7 @@
         login_password: "{{ mysql_password }}"
         login_host: "{{ mysql_host }}"
         login_port: "{{ mysql_port }}"
+        mysql_database: "{{mysql_database}}"
         query: "SHOW ENGINE INNODB STATUS;"
       register: deadlocks
 
@@ -67,6 +72,7 @@
         login_password: "{{ mysql_password }}"
         login_host: "{{ mysql_host }}"
         login_port: "{{ mysql_port }}"
+        mysql_database: "{{mysql_database}}"
         query: "SHOW PROCESSLIST;"
       register: active_jobs
 
