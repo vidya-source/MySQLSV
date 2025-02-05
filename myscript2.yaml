@@ -2,13 +2,7 @@
 - name: MySQL Health Check and Monitoring
   hosts: mysql_servers
   become: yes
-  vars:
-    MYSQLHOST: "127.0.0.1"
-    MYSQLPORT: "3306"
-    MYSQLUSER: "mysqlAutomation"
-    MYSQLPASSWORD: "mysqlAutomation"
-    MYSQLDATABASE: "MYSQLSV"
-
+  
   tasks:
     - name: Install MySQL Python connector
       ansible.builtin.pip:
