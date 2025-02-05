@@ -1,110 +1,33 @@
 ---
-- name: MySQL Health Check and Monitoring
+- name: Connect to MySQL server on Linux
   hosts: localhost
-  become: true
-  vars:
-    MYSQLHOST : "mysqlAutomation"
-    MYSQLPASSWORD : "mysqlAutomation"
-    MYSQLHOST : "127.0.0.1"
-    MYSQLPORT : "3306"
-    MYSQLDATABASE : "MSQLSV"
+  become: yes
 
-  
   tasks:
-    - name: Install MySQL Python connector
-      ansible.builtin.pip:
-        name: mysql-connector-python
+    - name: Ensure MySQL is installed
+      package:
+        name: mysql-client
         state: present
 
-    - name: Check Database Space Utilization
-      mysql_db:
-        login_host: "{{ MYSQLHOST }}"
-        login_port: "{{ MYSQLPORT }}"
-        login_user: "{{ MYSQLUSER }}"
-        login_password: "{{ MYSQLPASSWORD }}"
-        db: "{{ MYSQLDATABASE }}"
-        state: query
-        query: |
-          SELECT table_schema AS 'Database',
-                 SUM(data_length + index_length) / 1024 / 1024 AS 'Size (MB)'
-          FROM information_schema.tables
-          GROUP BY table_schema;
-      register: db_space
+    - name: Test MySQL connection
+      community.mysql.mysql_db:
+        name: information_schema
+        state: import
+        login_user: "{{ mysql_user }}"
+        login_password: "{{ mysql_password }}"
+        login_host: "{{ mysql_host }}"
+        login_port: "{{ mysql_port }}"
+        # You can also use `ssl` options here if needed
 
-    - name: Display Database Space Utilization
-      debug:
-        msg: "{{ db_space.query_result }}"
-
-    - name: Check Database Health (Uptime)
-      mysql_db:
-        login_host: "{{ MYSQLHOST }}"
-        login_port: "{{ MYSQLPORT }}"
-        login_user: "{{ MYSQLUSER }}"
-        login_password: "{{ MYSQLPASSWORD }}"
-        db: "{{ MYSQLDATABASE }}"
-        state: query
-        query: |
-          SHOW STATUS LIKE 'Uptime';
-      register: db_uptime
-
-    - name: Display Database Uptime
-      debug:
-        msg: "Uptime: {{ db_uptime.query_result }}"
-
-    - name: Check Threads Connected
-      mysql_db:
-        login_host: "{{ MYSQLHOST }}"
-        login_port: "{{ MYSQLPORT }}"
-        login_user: "{{ MYSQLUSER }}"
-        login_password: "{{ MYSQLPASSWORD }}"
-        db: "{{ MYSQLDATABASE }}"
-        state: query
-        query: |
-          SHOW STATUS LIKE 'Threads_connected';
-      register: threads_connected
-
-    - name: Display Threads Connected
-      debug:
-        msg: "Threads connected: {{ threads_connected.query_result }}"
-
-    - name: Check for Deadlocks
-      mysql_db:
-        login_host: "{{ MYSQLHOST }}"
-        login_port: "{{ MYSQLPORT }}"
-        login_user: "{{ MYSQLUSER }}"
-        login_password: "{{ MYSQLPASSWORD }}"
-        db: "{{ MYSQLDATABASE }}"
-        state: query
-        query: |
-          SHOW ENGINE INNODB STATUS;
-      register: deadlock_status
-
-    - name: Check if Deadlocks are present
-      debug:
-        msg: |
-          {% if 'LATEST DETECTED DEADLOCK' in deadlock_status.query_result %}
-            Deadlock detected:
-            {{ deadlock_status.query_result }}
-          {% else %}
-            No deadlocks detected.
-          {% endif %}
-
-    - name: Check Job Activities (Running Queries)
-      mysql_db:
-        login_host: "{{ MYSQLHOST }}"
-        login_port: "{{ MYSQLPORT }}"
-        login_user: "{{ MYSQLUSER }}"
-        login_password: "{{ MYSQLPASSWORD }}"
-        db: "{{ MYSQLDATABASE }}"
-        state: query
-        query: |
-          SHOW PROCESSLIST;
-      register: job_activities
-
-    - name: Display Current Running Queries
-      debug:
-        msg: |
-          {% for job in job_activities.query_result %}
-            ID: {{ job.id }}, User: {{ job.user }}, Command: {{ job.command }},
-            Time: {{ job.time }}, Info: {{ job.info }}
-          {% endfor %}
+    - name: List databases
+      community.mysql.mysql_db:
+        name: "{{ item }}"
+        state: list
+        login_user: "{{ mysql_user }}"
+        login_password: "{{ mysql_password }}"
+        login_host: "{{ mysql_host }}"
+        login_port: "{{ mysql_port }}"
+      loop:
+        - information_schema
+        - performance_schema
+        - mysql
