@@ -1,7 +1,7 @@
 ---
 - name: MySQL Health Check and Monitoring
-  hosts: mysql_servers
-  become: yes
+  hosts: localhost
+  become: true
   vars:
     MYSQLHOST : "mysqlAutomation"
     MYSQLPASSWORD : "mysqlAutomation"
