@@ -1,6 +1,6 @@
 ---
 - name: MySQL Server Health Check
-  hosts: all
+  hosts: 10.112.0.11
   connection: ssh
   become: true
   vars:
