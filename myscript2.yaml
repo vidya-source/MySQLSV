@@ -1,85 +1,95 @@
 ---
-- name: Perform MySQL Server Health and Resource Checks
+- name: Fetch Pending ServiceNow Requests and Process Approvals
   hosts: localhost
-  gather_facts: yes  # Automatically gather system facts (CPU, memory, etc.)
-  become: yes
+  gather_facts: no
   vars:
-    mysql_user: "{{mysql_user}}"
-    mysql_password: "{{mysql_password}}"
-    mysql_host: "{{mysql_host}}"
-    mysql_port: {{mysql_port}}"
-    mysql_db: "{{mysql_db}}"
+    servicenow_instance: "https://dev247928.service-now.com"
+    servicenow_username: "admin"
+    servicenow_password: "%ml4Vs9RXE/s"
+    servicenow_table: "sc_request"
+    tenant_id: "195e8969-c853-47b4-83d0-36e044d83923"
+    client_id: "e2e46ae3-2dee-4eed-a074-ddffd760ab2b"
+    client_secret: "{{client_secret}}"
+    graph_api_endpoint: "https://graph.microsoft.com/v1.0"
 
   tasks:
-    - name: Check disk space on server
-      shell: df -h /
-      register: disk_space
-      ignore_errors: true
+    - name: Fetch pending requests from ServiceNow
+      uri:
+        url: "{{ servicenow_instance }}/api/now/table/{{ servicenow_table }}"
+        method: GET
+        user: "{{ servicenow_username }}"
+        password: "{{ servicenow_password }}"
+        force_basic_auth: yes
+        return_content: yes
+      register: servicenow_response
 
-    - name: Display disk space
+    - name: Display request details
       debug:
-        msg: "{{ disk_space.stdout }}"
+        msg: |
+          {% for request in servicenow_response.json.result %}
+          Request Number: {{ request.get('number', 'N/A') }}
+          User ID (Requested For): {{ request.get('requested_for', {}).get('value', 'Unknown') }}
+          User ID (Opened By): {{ request.get('opened_by', {}).get('value', 'Unknown') }}
+          Requested License Type: {{ request.get('short_description', 'Not Provided') }}
+          Description: {{ request.get('description', 'Not Provided') }}
+          ------------------------------------------------
+          {% endfor %}
 
-    - name: Check MySQL database utilization
-      mysql_query:
-        login_user: "{{ mysql_user }}"
-        login_password: "{{ mysql_password }}"
-        login_host: "{{ mysql_host }}"
-        login_port: "{{ mysql_port }}"
-        query: "SELECT table_schema AS DB_NAME, SUM(data_length + index_length) / 1024 / 1024 AS DB_SIZE_MB FROM information_schema.tables GROUP BY table_schema;"
-      register: db_utilization
-      ignore_errors: true
+    - name: Get Azure access token
+      uri:
+        url: "https://login.microsoftonline.com/{{ tenant_id }}/oauth2/v2.0/token"
+        method: POST
+        body:
+          client_id: "{{ client_id }}"
+          client_secret: "{{ client_secret }}"
+          scope: "https://graph.microsoft.com/.default"
+          grant_type: "client_credentials"
+        body_format: form-urlencoded
+        return_content: yes
+      register: azure_auth_response
 
-    - name: Display database utilization
+    - name: Set Azure token
+      set_fact:
+        access_token: "{{ azure_auth_response.json.access_token }}"
+
+    - name: Check License Availability in Azure
+      uri:
+        url: "{{ graph_api_endpoint }}/subscribedSkus"
+        method: GET
+        headers:
+          Authorization: "Bearer {{ access_token }}"
+          Content-Type: "application/json"
+        return_content: yes
+      register: azure_license_response
+
+    - name: Display license availability
       debug:
-        msg: "{{ db_utilization.query_result }}"
+        msg: "Available Licenses: {{ azure_license_response.json }}"
 
-    - name: Check MySQL health (Uptime)
-      mysql_query:
-        login_user: "{{ mysql_user }}"
-        login_password: "{{ mysql_password }}"
-        login_host: "{{ mysql_host }}"
-        login_port: "{{ mysql_port }}"
-        query: "SHOW STATUS LIKE 'Uptime';"
-      register: db_health
-      ignore_errors: true
+    # Simulating Approval Process
+    - name: Simulate Approval - Manually Set Approval Decision
+      pause:
+        prompt: "Approve or Deny request? (Type 'approve' or 'deny')"
+      register: approval_decision
 
-    - name: Display MySQL health (Uptime)
+    - name: Set Request Status Based on Approval
+      set_fact:
+        request_status: "{{ 'approved' if approval_decision.user_input | lower == 'approve' else 'denied' }}"
+
+    - name: Update ServiceNow Request Status
+      uri:
+        url: "{{ servicenow_instance }}/api/now/table/{{ servicenow_table }}"
+        method: PATCH
+        user: "{{ servicenow_username }}"
+        password: "{{ servicenow_password }}"
+        force_basic_auth: yes
+        body_format: json
+        body:
+          state: "{{ '3' if request_status == 'approved' else '4' }}"  # 3 = Approved, 4 = Denied
+        return_content: yes
+      when: request_status in ['approved', 'denied']
+      register: update_response
+
+    - name: Display Update Status
       debug:
-        msg: "{{ db_health.query_result }}"
-
-    - name: Check for MySQL deadlocks
-      mysql_query:
-        login_user: "{{ mysql_user }}"
-        login_password: "{{ mysql_password }}"
-        login_host: "{{ mysql_host }}"
-        login_port: "{{ mysql_port }}"
-        query: "SHOW ENGINE INNODB STATUS;"
-      register: deadlocks
-      ignore_errors: true
-
-    - name: Display deadlock information
-      debug:
-        msg: "{{ deadlocks.query_result | selectattr('message', 'search', 'DEADLOCK') | list }}"
-
-    - name: Check MySQL process list (jobs/queries)
-      mysql_query:
-        login_user: "{{ mysql_user }}"
-        login_password: "{{ mysql_password }}"
-        login_host: "{{ mysql_host }}"
-        login_port: "{{ mysql_port }}"
-        query: "SHOW PROCESSLIST;"
-      register: mysql_jobs
-      ignore_errors: true
-
-    - name: Display current MySQL jobs
-      debug:
-        msg: "{{ mysql_jobs.query_result }}"
-
-    - name: Monitor CPU and memory usage
-      debug:
-        msg:
-          - "CPU Usage: {{ ansible_facts['processor_cores'] }} cores"
-          - "CPU Load: {{ ansible_facts['processor'] }}"
-          - "Memory Usage: {{ ansible_facts['memtotal_mb'] }} MB Total"
-          - "Memory Used: {{ ansible_facts['memused_mb'] }} MB"
+        msg: "ServiceNow request update response: {{ update_response.json }}"
