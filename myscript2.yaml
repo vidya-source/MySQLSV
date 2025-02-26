@@ -1,44 +1,19 @@
 ---
-- name: Fetch Pending ServiceNow Requests and Process Approvals
+- name: Azure AD Automation using Ansible
   hosts: localhost
+  connection: local
   gather_facts: no
+
   vars:
-    servicenow_instance: "https://dev247928.service-now.com"
-    servicenow_username: "admin"
-    servicenow_password: "%ml4Vs9RXE/s"
-    servicenow_table: "sc_request"
-    tenant_id: "195e8969-c853-47b4-83d0-36e044d83923"
-    client_id: "e2e46ae3-2dee-4eed-a074-ddffd760ab2b"
-    client_secret: "{{client_secret}}"
-    graph_api_endpoint: "https://graph.microsoft.com/v1.0"
+    graph_api_url: "https://graph.microsoft.com/v1.0"
 
   tasks:
-    - name: Fetch pending requests from ServiceNow
-      uri:
-        url: "{{ servicenow_instance }}/api/now/table/{{ servicenow_table }}"
-        method: GET
-        user: "{{ servicenow_username }}"
-        password: "{{ servicenow_password }}"
-        force_basic_auth: yes
-        return_content: yes
-      register: servicenow_response
-
-    - name: Display request details
-      debug:
-        msg: |
-          {% for request in servicenow_response.json.result %}
-          Request Number: {{ request.get('number', 'N/A') }}
-          User ID (Requested For): {{ request.get('requested_for', {}).get('value', 'Unknown') }}
-          User ID (Opened By): {{ request.get('opened_by', {}).get('value', 'Unknown') }}
-          Requested License Type: {{ request.get('short_description', 'Not Provided') }}
-          Description: {{ request.get('description', 'Not Provided') }}
-          ------------------------------------------------
-          {% endfor %}
-
-    - name: Get Azure access token
+    - name: Get Access Token
       uri:
         url: "https://login.microsoftonline.com/{{ tenant_id }}/oauth2/v2.0/token"
         method: POST
+        headers:
+          Content-Type: "application/x-www-form-urlencoded"
         body:
           client_id: "{{ client_id }}"
           client_secret: "{{ client_secret }}"
@@ -46,50 +21,80 @@
           grant_type: "client_credentials"
         body_format: form-urlencoded
         return_content: yes
-      register: azure_auth_response
+      register: token_response
+      failed_when: token_response.status != 200
 
-    - name: Set Azure token
+    - name: Set access token fact
       set_fact:
-        access_token: "{{ azure_auth_response.json.access_token }}"
+        access_token: "{{ token_response.json.access_token }}"
+      when: token_response.status == 200
 
-    - name: Check License Availability in Azure
+    - name: Debug - Show Access Token Status
+      debug:
+        msg: "Access Token Retrieval: {{ 'Successful' if token_response.status == 200 else 'Unsuccessful' }}"
+
+    - name: Check for User
       uri:
-        url: "{{ graph_api_endpoint }}/subscribedSkus"
+        url: "{{ graph_api_url }}/users/Jayanta.Banerjee@amitomar63gmail.onmicrosoft.com"
         method: GET
         headers:
           Authorization: "Bearer {{ access_token }}"
           Content-Type: "application/json"
-        return_content: yes
-      register: azure_license_response
+      register: user_check
+      failed_when: user_check.status not in [200, 404]
 
-    - name: Display license availability
+    - name: Debug - Show User Check Result
       debug:
-        msg: "Available Licenses: {{ azure_license_response.json }}"
-
-    # Simulating Approval Process
-    - name: Simulate Approval - Manually Set Approval Decision
-      pause:
-        prompt: "Approve or Deny request? (Type 'approve' or 'deny')"
-      register: approval_decision
-
-    - name: Set Request Status Based on Approval
-      set_fact:
-        request_status: "{{ 'approved' if approval_decision.user_input | lower == 'approve' else 'denied' }}"
-
-    - name: Update ServiceNow Request Status
+        msg: "User Check: {{ 'User Found' if user_check.status == 200 else 'User Not Found' }}"
+    
+    - name: Create User if Not Exists
       uri:
-        url: "{{ servicenow_instance }}/api/now/table/{{ servicenow_table }}"
-        method: PATCH
-        user: "{{ servicenow_username }}"
-        password: "{{ servicenow_password }}"
-        force_basic_auth: yes
-        body_format: json
+        url: "{{ graph_api_url }}/users"
+        method: POST
+        headers:
+          Authorization: "Bearer {{ access_token }}"
+          Content-Type: "application/json"
         body:
-          state: "{{ '3' if request_status == 'approved' else '4' }}"  # 3 = Approved, 4 = Denied
-        return_content: yes
-      when: request_status in ['approved', 'denied']
-      register: update_response
+          accountEnabled: true
+          displayName: "Akhilsandeep3"
+          mailNickname: "AS3"
+          userPrincipalName: "AS3@amitomar63gmail.onmicrosoft.com"
+          passwordProfile:
+            forceChangePasswordNextSignIn: true
+            password: "TempPass@123"
+        body_format: json
+      register: user_creation
+      when: user_check.status == 404
 
-    - name: Display Update Status
+    - name: Debug - Show User Creation Status
       debug:
-        msg: "ServiceNow request update response: {{ update_response.json }}"
+        msg: "User Creation: {{ 'Successful' if user_creation.status in [200, 201] else 'Unsuccessful' }}"
+      when: user_check.status == 404
+
+    - name: Enable User if Disabled
+      uri:
+        url: "{{ graph_api_url }}/users/{{ newuser1@amitomar63gmail.onmicrosoft.com }}?$select=accountEnabled"
+        method: PATCH
+        headers:
+          Authorization: "Bearer {{ access_token }}"
+          Content-Type: "application/json"
+        body:
+          accountEnabled: true
+        body_format: json
+      register: user_enable
+      when: user_check.status == 200 and not user_check.json.get('accountEnabled', true)
+
+    - name: Check if User is Enabled
+      uri:
+        url: "{{ graph_api_url }}/users/{{ Jayanta.Banerjee@amitomar63gmail.onmicrosoft.com }}?$select=accountEnabled"
+        method: GET
+        headers:
+          Authorization: "Bearer {{ access_token }}"
+          Content-Type: "application/json"
+      register: user_check
+      failed_when: user_check.status not in [200, 404]
+
+       
+
+
+   
