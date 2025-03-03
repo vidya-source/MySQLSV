@@ -7,10 +7,10 @@
     client_id: "e2e46ae3-2dee-4eed-a074-ddffd760ab2b"
     client_secret: "PQZ8Q~XSmMsU4dbgk2KyWMHK1h8X7ciD~H.1_csi"
     graph_api_endpoint: "https://graph.microsoft.com/v1.0"
-    user_name: "Suhas 123"
-    user_email: "suhas@yourdomain.com"
-    mail_nickname: "suhas123"
-    user_principal_name: "suhas123@amitomar63gmail.onmicrosoft.com"
+    user_name: "{{user_name}}"
+    user_email: "{{user_email}}"
+    mail_nickname: "{{mail_nickname}}"
+    user_principal_name: "{{user_principal_name}}"
     default_password: "Default@1234"
 
   tasks:
