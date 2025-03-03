@@ -8,6 +8,17 @@
     client_secret: "PQZ8Q~XSmMsU4dbgk2KyWMHK1h8X7ciD~H.1_csi"
     graph_api_endpoint: "https://graph.microsoft.com/v1.0"
     
+    # Define user variables to avoid 'undefined variable' errors
+    user_display_name: "John Doe"
+    user_mail_nickname: "john.doe"
+    user_principal_name: "john.doe@example.com"
+    user_first_name: "John"
+    user_last_name: "Doe"
+    user_department: "IT"
+    user_job_title: "Developer"
+    user_password: "TemporaryP@ss123"
+    license_sku_id: "6fd2c87f-b296-42f0-b197-1e91e994b900"  # Example SKU ID
+    
   tasks:
     - name: Get Azure access token
       uri:
