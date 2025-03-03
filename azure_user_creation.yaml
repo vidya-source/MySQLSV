@@ -1,5 +1,5 @@
 ---
-- name: Create Azure User
+- name: Create Azure AD User
   hosts: localhost
   gather_facts: no
   vars:
@@ -7,18 +7,12 @@
     client_id: "e2e46ae3-2dee-4eed-a074-ddffd760ab2b"
     client_secret: "PQZ8Q~XSmMsU4dbgk2KyWMHK1h8X7ciD~H.1_csi"
     graph_api_endpoint: "https://graph.microsoft.com/v1.0"
-    
-    # Define user variables to avoid 'undefined variable' errors
-    user_display_name: "John Doe"
-    user_mail_nickname: "john.doe"
-    user_principal_name: "john.doe@example.com"
-    user_first_name: "John"
-    user_last_name: "Doe"
-    user_department: "IT"
-    user_job_title: "Developer"
-    user_password: "TemporaryP@ss123"
-    license_sku_id: "6fd2c87f-b296-42f0-b197-1e91e994b900"  # Example SKU ID
-    
+    user_name: "Suhas 123"
+    user_email: "suhas@yourdomain.com"
+    mail_nickname: "suhas123"
+    user_principal_name: "suhas123@amitomar63gmail.onmicrosoft.com"
+    default_password: "Default@1234"
+
   tasks:
     - name: Get Azure access token
       uri:
@@ -32,51 +26,42 @@
         body_format: form-urlencoded
         return_content: yes
       register: azure_auth_response
-      
+
     - name: Set Azure token
       set_fact:
         access_token: "{{ azure_auth_response.json.access_token }}"
-    
-    - name: Create User in Azure AD
+
+    - name: Check if user exists in Azure AD
+      uri:
+        url: "{{ graph_api_endpoint }}/users/{{ user_principal_name }}"
+        method: GET
+        headers:
+          Authorization: "Bearer {{ access_token }}"
+          Content-Type: "application/json"
+        status_code: [200, 404]
+        return_content: yes
+      register: user_check
+
+    - name: Create User in Azure AD if Not Exists
       uri:
         url: "{{ graph_api_endpoint }}/users"
         method: POST
         headers:
           Authorization: "Bearer {{ access_token }}"
           Content-Type: "application/json"
+        body:
+          accountEnabled: true
+          displayName: "{{ user_name }}"
+          mailNickname: "{{ mail_nickname }}"
+          userPrincipalName: "{{ user_principal_name }}"
+          passwordProfile:
+            forceChangePasswordNextSignIn: true
+            password: "{{ default_password }}"
         body_format: json
-        body: |
-          {
-            "accountEnabled": true,
-            "displayName": "{{ user_display_name }}",
-            "mailNickname": "{{ user_mail_nickname }}",
-            "userPrincipalName": "{{ user_principal_name }}",
-            "givenName": "{{ user_first_name }}",
-            "surname": "{{ user_last_name }}",
-            "department": "{{ user_department }}",
-            "jobTitle": "{{ user_job_title }}",
-            "passwordProfile": {
-              "forceChangePasswordNextSignIn": true,
-              "password": "{{ user_password }}"
-            }
-          }
-      register: created_user
-      
-    - name: Assign License to User
-      uri:
-        url: "{{ graph_api_endpoint }}/users/{{ created_user.json.id }}/assignLicense"
-        method: POST
-        headers:
-          Authorization: "Bearer {{ access_token }}"
-          Content-Type: "application/json"
-        body_format: json
-        body: |
-          {
-            "addLicenses": [
-              {
-                "skuId": "{{ license_sku_id }}"
-              }
-            ],
-            "removeLicenses": []
-          }
-      register: license_assignment
+        status_code: [201]
+      when: user_check.status == 404
+      register: user_creation
+
+    - name: Debug - Show User Creation Results
+      debug:
+        msg: "User Creation Results: {{ user_creation.json | default('User already exists') }}"
