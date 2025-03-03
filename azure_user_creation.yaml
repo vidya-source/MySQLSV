@@ -12,11 +12,12 @@
     client_secret: "PQZ8Q~XSmMsU4dbgk2KyWMHK1h8X7ciD~H.1_csi"
     graph_api_endpoint: "https://graph.microsoft.com/v1.0"
     default_password: "Default@1234"
+    request_number: "REQ0010185"  # Specify request number here
 
   tasks:
     - name: Fetch pending approved requests from ServiceNow
       uri:
-        url: "{{ servicenow_instance }}/api/now/table/{{ servicenow_table }}?sysparm_query=request_state=pending_approval"
+        url: "{{ servicenow_instance }}/api/now/table/{{ servicenow_table }}?sysparm_query=number={{ request_number }}^request_state=pending_approval"
         method: GET
         user: "{{ servicenow_username }}"
         password: "{{ servicenow_password }}"
