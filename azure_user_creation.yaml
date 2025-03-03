@@ -14,9 +14,9 @@
     default_password: "Default@1234"
 
   tasks:
-    - name: Fetch pending requests from ServiceNow
+    - name: Fetch pending approved requests from ServiceNow
       uri:
-        url: "{{ servicenow_instance }}/api/now/table/{{ servicenow_table }}?sysparm_query=request_state=requested"
+        url: "{{ servicenow_instance }}/api/now/table/{{ servicenow_table }}?sysparm_query=request_state=pending_approval"
         method: GET
         user: "{{ servicenow_username }}"
         password: "{{ servicenow_password }}"
