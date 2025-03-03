@@ -1,0 +1,71 @@
+---
+- name: Create Azure User
+  hosts: localhost
+  gather_facts: no
+  vars:
+    tenant_id: "195e8969-c853-47b4-83d0-36e044d83923"
+    client_id: "e2e46ae3-2dee-4eed-a074-ddffd760ab2b"
+    client_secret: "PQZ8Q~XSmMsU4dbgk2KyWMHK1h8X7ciD~H.1_csi"
+    graph_api_endpoint: "https://graph.microsoft.com/v1.0"
+    
+  tasks:
+    - name: Get Azure access token
+      uri:
+        url: "https://login.microsoftonline.com/{{ tenant_id }}/oauth2/v2.0/token"
+        method: POST
+        body:
+          client_id: "{{ client_id }}"
+          client_secret: "{{ client_secret }}"
+          scope: "https://graph.microsoft.com/.default"
+          grant_type: "client_credentials"
+        body_format: form-urlencoded
+        return_content: yes
+      register: azure_auth_response
+      
+    - name: Set Azure token
+      set_fact:
+        access_token: "{{ azure_auth_response.json.access_token }}"
+    
+    - name: Create User in Azure AD
+      uri:
+        url: "{{ graph_api_endpoint }}/users"
+        method: POST
+        headers:
+          Authorization: "Bearer {{ access_token }}"
+          Content-Type: "application/json"
+        body_format: json
+        body: |
+          {
+            "accountEnabled": true,
+            "displayName": "{{ user_display_name }}",
+            "mailNickname": "{{ user_mail_nickname }}",
+            "userPrincipalName": "{{ user_principal_name }}",
+            "givenName": "{{ user_first_name }}",
+            "surname": "{{ user_last_name }}",
+            "department": "{{ user_department }}",
+            "jobTitle": "{{ user_job_title }}",
+            "passwordProfile": {
+              "forceChangePasswordNextSignIn": true,
+              "password": "{{ user_password }}"
+            }
+          }
+      register: created_user
+      
+    - name: Assign License to User
+      uri:
+        url: "{{ graph_api_endpoint }}/users/{{ created_user.json.id }}/assignLicense"
+        method: POST
+        headers:
+          Authorization: "Bearer {{ access_token }}"
+          Content-Type: "application/json"
+        body_format: json
+        body: |
+          {
+            "addLicenses": [
+              {
+                "skuId": "{{ license_sku_id }}"
+              }
+            ],
+            "removeLicenses": []
+          }
+      register: license_assignment
